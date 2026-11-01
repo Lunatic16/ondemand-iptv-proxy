@@ -123,7 +123,7 @@ Everything is configured through environment variables — no config files.
 
 ```text
    ┌──────────────┐   playlist.m3u      ┌────────────────────┐
-   │ your player  │◄────────────────────│    ondemand-iptv-proxy     │
+   │ your player  │◄────────────────────│ ondemand-iptv-proxy│
    │ (VLC, mpv,   │   /s/<base64-url>   │  · fetch + cache   │────► upstream
    │ Kodi, web UI)│────────────────────►│  · rewrite URLs    │      provider
    └──────────────┘   every segment &   │  · repair streams  │────► upstream
