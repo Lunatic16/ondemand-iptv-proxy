@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPTV Proxy</title>
+<style>
+  :root { --bg:#0f1115; --panel:#181b22; --line:#262a33; --text:#e6e8ec; --muted:#8b93a1; --accent:#4f9dff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, sans-serif; }
+  header { padding:14px 18px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1 { font-size:16px; margin:0 12px 0 0; }
+  input, select, button { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 10px; font:inherit; }
+  input[type=search] { flex:1; min-width:180px; }
+  button { cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  .url { font-family:ui-monospace, monospace; font-size:12px; color:var(--muted); }
+  main { padding:16px 18px; max-width:1200px; margin:0 auto; }
+  #player { display:none; margin-bottom:16px; }
+  #player video { width:100%; max-height:60vh; background:#000; border-radius:8px; }
+  #nowplaying { margin:6px 0; color:var(--muted); }
+  #status { color:var(--muted); margin-bottom:10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:8px; }
+  .ch { display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .ch img { width:36px; height:36px; object-fit:contain; border-radius:4px; background:#000; flex:none; }
+  .ch .ph { width:36px; height:36px; border-radius:4px; background:var(--line); flex:none; }
+  .ch .meta { flex:1; min-width:0; cursor:pointer; }
+  .ch .name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ch .grp { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ch button { padding:4px 8px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>IPTV Proxy</h1>
+  <span class="url" id="plurl"></span>
+  <button id="copypl">Copy playlist URL</button>
+  <button id="refresh">Refresh</button>
+  <input type="search" id="q" placeholder="Search channels…">
+  <select id="grp"><option value="">All groups</option></select>
+</header>
+<main>
+  <div id="player">
+    <video id="video" controls autoplay playsinline></video>
+    <div id="nowplaying"></div>
+  </div>
+  <div id="status">Loading…</div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script>
+const MAX = 1000;
+let data = { channels: [] }, hls = null;
+const $ = id => document.getElementById(id);
+
+async function load(force) {
+  $('status').textContent = force ? 'Refreshing…' : 'Loading…';
+  try {
+    const r = await fetch('/api/' + (force ? 'refresh' : 'channels'), force ? { method: 'POST' } : {});
+    if (!r.ok) throw new Error(await r.text());
+    data = await r.json();
+  } catch (e) {
+    $('status').textContent = 'Failed to load playlist: ' + e.message;
+    return;
+  }
+  $('plurl').textContent = data.playlist;
+  const groups = [...new Set(data.channels.map(c => c.group).filter(Boolean))].sort();
+  const cur = $('grp').value;
+  $('grp').innerHTML = '<option value="">All groups</option>';
+  groups.forEach(g => { const o = document.createElement('option'); o.value = o.textContent = g; $('grp').appendChild(o); });
+  $('grp').value = groups.includes(cur) ? cur : '';
+  render();
+}
+
+function render() {
+  const q = $('q').value.trim().toLowerCase(), g = $('grp').value;
+  const list = data.channels.filter(c => (!g || c.group === g) && (!q || c.name.toLowerCase().includes(q)));
+  const shown = list.slice(0, MAX);
+  const grid = $('grid');
+  grid.textContent = '';
+  for (const c of shown) {
+    const el = document.createElement('div'); el.className = 'ch';
+    let img;
+    if (c.logo) { img = document.createElement('img'); img.src = c.logo; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; img.onerror = () => { const p = document.createElement('div'); p.className = 'ph'; img.replaceWith(p); }; }
+    else { img = document.createElement('div'); img.className = 'ph'; }
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const n = document.createElement('div'); n.className = 'name'; n.textContent = c.name || '(unnamed)';
+    const gr = document.createElement('div'); gr.className = 'grp'; gr.textContent = c.group || '';
+    meta.append(n, gr);
+    meta.onclick = () => play(c);
+    const cp = document.createElement('button'); cp.textContent = 'Copy';
+    cp.title = 'Copy proxied stream URL';
+    cp.onclick = () => copy(c.url, cp);
+    el.append(img, meta, cp);
+    grid.appendChild(el);
+  }
+  const age = data.age_seconds ?? 0;
+  $('status').textContent = `${list.length} channel${list.length === 1 ? '' : 's'}` +
+    (list.length > MAX ? ` (showing first ${MAX}, refine your search)` : '') +
+    ` · playlist cached ${age}s ago (refreshes every ${data.ttl_seconds}s)`;
+}
+
+function play(c) {
+  const v = $('video');
+  $('player').style.display = 'block';
+  $('nowplaying').textContent = 'Now playing: ' + c.name;
+  if (hls) { hls.destroy(); hls = null; }
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls({ lowLatencyMode: false });
+    hls.loadSource(c.url);
+    hls.attachMedia(v);
+    hls.on(Hls.Events.ERROR, (_, d) => {
+      if (d.fatal) {
+        hls.destroy(); hls = null;
+        v.src = c.url; v.play().catch(() => {
+          $('nowplaying').textContent = 'Playback failed in browser (stream may not be HLS): ' + c.name;
+        });
+      }
+    });
+    v.play().catch(() => {});
+  } else {
+    v.src = c.url; v.play().catch(() => {});
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = old, 1200);
+}
+
+$('q').addEventListener('input', render);
+$('grp').addEventListener('change', render);
+$('refresh').onclick = () => load(true);
+$('copypl').onclick = e => copy(data.playlist, e.target);
+load(false);
+</script>
+</body>
+</html>

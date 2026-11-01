@@ -1,0 +1,13 @@
+services:
+  iptvproxy:
+    build: .
+    container_name: ondemand-iptvproxy
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      # Address TiviMate uses to reach this box (LAN IP or hostname)
+      #PUBLIC_BASE: "http://192.168.1.18:8090"
+      UPSTREAM_URL: "https://ondemand.st/papi/iptv/playlist.m3u?token=dami2026live"
+      UPSTREAM_UA: "Mozilla/5.0 OnDemandIPTV AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/604.1"
+      PLAYLIST_TTL: "60"   # seconds between upstream playlist refreshes
