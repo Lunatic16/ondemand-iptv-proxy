@@ -370,10 +370,13 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var _ embed.FS
+//go:embed index.html hls.min.js
+var assets embed.FS
 
-//go:embed index.html
-var indexHTML []byte
+var (
+	indexHTML, _ = assets.ReadFile("index.html")
+	hlsJS, _     = assets.ReadFile("hls.min.js")
+)
 
 type channel struct {
 	Name  string `json:"name"`
@@ -482,9 +485,18 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(indexHTML)
 }
 
+// hlsHandler serves the vendored hls.js so the UI works on a LAN with no
+// internet access (and without depending on a third-party CDN).
+func hlsHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(hlsJS)
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/hls.min.js", hlsHandler)
 	mux.HandleFunc("/api/channels", channelsHandler)
 	mux.HandleFunc("/api/refresh", refreshHandler)
 	mux.HandleFunc("/playlist.m3u", playlistHandler)
