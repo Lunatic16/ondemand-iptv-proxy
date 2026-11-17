@@ -138,7 +138,9 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .tile.empty.tgt .ph .t{color:var(--acc2)}
 @keyframes pulse{50%{border-color:rgba(255,91,58,.35)}}
 
-.top-ov{position:absolute;left:0;right:0;top:0;z-index:4;display:flex;align-items:center;gap:9px;padding:9px 10px 22px;background:linear-gradient(rgba(0,0,0,.72),transparent);pointer-events:none}
+.top-ov{position:absolute;left:0;right:0;top:0;z-index:4;display:flex;align-items:center;gap:9px;padding:9px 10px 22px;background:linear-gradient(rgba(0,0,0,.72),transparent);pointer-events:none;opacity:0;transition:opacity .35s ease .7s}
+/* titles show while the pointer is over the tile (or it has keyboard focus / was just tapped), then fade after a short delay */
+.tile:hover .top-ov,.tile:focus-within .top-ov,.tile.showbar .top-ov,.tile.st-error .top-ov{opacity:1;transition-delay:0s;transition-duration:.15s}
 .tile.empty .top-ov,.tile.empty .bar{display:none}
 .top-ov>*{pointer-events:auto}
 .slotno{min-width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.14);backdrop-filter:blur(6px);display:grid;place-items:center;font:700 11px var(--mono);padding:0 5px;gap:3px;grid-auto-flow:column}
